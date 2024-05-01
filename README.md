@@ -1,14 +1,23 @@
-## How To Use Docker To Make Local Development A Breeze
+### rag3 - Containerized LLM for Python
 
-Docker is a very powerful tool for developing applications that run in the cloud. If you want to get the most out of it, you need to make sure that the way you're running your code locally matches as closely as possible with how it runs in the cloud.
+## Project Description
 
-Today I'm going to show you how to do this, using a simple API server in Python as an example.
+Create an application that uses LLMs to read my documents and researches them.  I want the system to be private so I’m comfortable sharing my personal information like legal documents, bank statements…etc.  I also want to choose different models, including the latest LLMs and embedding models to have the best possible experience.
 
-Video: https://youtu.be/zkMRWDQV4Tg.
 
-## Usage
+### Project Info
 
-As a first step, install Docker (see: https://www.docker.com) and install the requirements:
+## requiremetns.txt
+```bash
+fastapi
+pydantic
+uvicorn
+watchfiles
+httpx
+```
+
+
+### Project Usage
 
 ```
 pip install -r requirements.txt
@@ -31,9 +40,10 @@ In order to run the example server with docker compose, use this:
 
 ```
 docker-compose up --build
+docker-compose up -d 
 ```
 
-If you use docker compose and you make a minor change in the file, you can now see how everything is updated and the server is restarted automatically.
+
 
 
 ### Project Directory - Goal
