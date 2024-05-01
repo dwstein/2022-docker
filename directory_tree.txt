@@ -1,0 +1,23 @@
+.
+├── Dockerfile
+├── LICENSE
+├── README.md
+├── app
+│   ├── __init__.py
+│   ├── main.py
+│   ├── routes
+│   │   ├── __init__.py
+│   │   └── endpoints.py
+│   └── services
+│       ├── __init__.py
+│       └── api_services.py
+├── channels.json
+├── directory_tree.txt
+├── docker-compose.yaml
+├── models
+│   ├── __init__.py
+│   ├── channel.py
+│   └── models.py
+└── requirements.txt
+
+5 directories, 16 files

@@ -34,3 +34,27 @@ docker-compose up --build
 ```
 
 If you use docker compose and you make a minor change in the file, you can now see how everything is updated and the server is restarted automatically.
+
+
+### Project Directory - Goal
+```bash
+/project_root
+│
+├── app/
+│   ├── __init__.py
+│   ├── main.py               # Your FastAPI application entry point
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── models.py         # Data models, if any
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── api_services.py   # Services for external API interactions
+│   └── routes/
+│       ├── __init__.py
+│       └── endpoints.py      # FastAPI routes
+│
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── README.md
+```
