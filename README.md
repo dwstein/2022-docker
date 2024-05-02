@@ -1,5 +1,12 @@
 ### rag3 - Containerized LLM for Python
 
+### Current Issues
+- conversation id issues
+- issue seems to be with this fuction get_or_create_conversation in endpoints
+- the idea is to have a consistent conversation id.  
+
+
+
 ## Project Description
 
 Create an application that uses LLMs to read my documents and researches them.  I want the system to be private so I’m comfortable sharing my personal information like legal documents, bank statements…etc.  I also want to choose different models, including the latest LLMs and embedding models to have the best possible experience.
@@ -14,6 +21,7 @@ pydantic
 uvicorn
 watchfiles
 httpx
+langchain
 ```
 
 

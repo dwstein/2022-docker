@@ -44,55 +44,117 @@ app.include_router(api_router)
 
 # app/routes/endpoints.py
 
-from fastapi import APIRouter, HTTPException
+from typing import Optional
+import uuid
+import logging
+from fastapi import APIRouter, HTTPException, Depends, Response
 
 from ..services.api_services import query_ollama_api
+from models.models import Conversation  # Ensure correct relative import path
+
+# Setup logger
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 router = APIRouter()
 
+# Simulated database or in-memory store for conversations
+conversations = {}
+
+def get_or_create_conversation(conversation_id: Optional[str] = None) -> (Conversation, str):
+    if conversation_id:
+        if conversation_id in conversations:
+            logger.info(f"Retrieved existing conversation with ID {conversation_id}")
+            return conversations[conversation_id], conversation_id
+        else:
+            logger.warning(f"Conversation ID {conversation_id} not found in existing records.")
+            raise HTTPException(status_code=404, detail="Conversation ID not found")
+    else:
+        new_conv_id = str(uuid.uuid4())
+        new_conv = Conversation()
+        conversations[new_conv_id] = new_conv
+        logger.info(f"Created new conversation with ID {new_conv_id}")
+        return new_conv, new_conv_id
+
+
 @router.get("/")
 def read_root():
+    logger.info("Root endpoint accessed")
     return {"message": "The server is running!"}
 
 @router.post("/ask")
-async def ask_question(model: str, question: str):
+async def ask_question(response: Response, model: str, question: str, conversation_id: Optional[str] = None):
+    conversation, conv_id = get_or_create_conversation(conversation_id)
+    if not conversation_id:
+        response.headers['X-Conversation-ID'] = conv_id  # Include the new conversation ID in the response headers
+    logger.info(f"Asking question: {question} using model: {model} in conversation: {conv_id}")
     try:
-        response = await query_ollama_api(model, question)
-        return response
+        api_response = await query_ollama_api(model, question, conversation)
+        logger.info("Query successful, returning response")
+        return api_response
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error in ask_question: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
 
 
 
 # app/services/api_services.py
 
+
 from fastapi import HTTPException
 import httpx
 import logging
+import json
+from models.models import Conversation  # Ensure you import your Conversation model
 
 logger = logging.getLogger(__name__)
 
-async def query_ollama_api(model: str, question: str) -> dict:
+def parse_json_response(raw_json):
+    """ Attempt to parse multiple JSON objects if found. """
+    try:
+        objs = []
+        idx = 0
+        while idx != len(raw_json):
+            obj, idx = json.JSONDecoder().raw_decode(raw_json, idx=idx)
+            objs.append(obj)
+            raw_json = raw_json[idx:].strip()
+            idx = 0 if raw_json else len(raw_json)
+        return objs
+    except json.JSONDecodeError as e:
+        logger.error("Failed to decode JSON: " + str(e))
+        raise
+
+async def query_ollama_api(model: str, question: str, conversation: Conversation) -> dict:
     url = "http://ollama-container:11434/api/chat"
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": question}],
+        "messages": conversation.get_history() + [{"role": "user", "content": question}],
         "stream": False
     }
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             response = await client.post(url, json=payload)
             response.raise_for_status()
-            return response.json()
+            try:
+                # First try parsing normally
+                answer = response.json()
+            except json.JSONDecodeError:
+                # If normal parsing fails, attempt to parse multiple JSON objects
+                answer = parse_json_response(response.text)
+                if not answer:
+                    raise HTTPException(status_code=500, detail="Invalid JSON response")
+            # Assuming the relevant information is in the first JSON object if multiple were parsed
+            first_answer = answer[0] if isinstance(answer, list) else answer
+            conversation.add_message("user", question)
+            conversation.add_message("llm", first_answer.get("message", {}).get("content", ""))
+            return first_answer
     except httpx.HTTPStatusError as http_err:
-        logger.error(f"HTTP status error occurred: {http_err}; Response: {http_err.response.text if http_err.response else 'No response'}")
-        raise HTTPException(status_code=500, detail=f"HTTP status error: {http_err.response.text if http_err.response else 'No response'}")
-    except httpx.TimeoutException as timeout_err:
-        logger.error("Timeout occurred while trying to connect to the Ollama API")
-        raise HTTPException(status_code=504, detail="Timeout connecting to the Ollama API. Please try again later.")
-    except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An unexpected error has occurred. Please contact support.")
+        logger.error("HTTP status error occurred: {0}".format(http_err))
+        raise HTTPException(status_code=http_err.response.status_code, detail=str(http_err.response.text))
+    except httpx.RequestError as req_err:
+        logger.error("Request failed: {0}".format(req_err))
+        raise HTTPException(status_code=500, detail="Network error")
 
 
 fastapi
@@ -100,6 +162,7 @@ pydantic
 uvicorn
 watchfiles
 httpx
+langchain
 
 FROM python:latest
 
@@ -115,6 +178,21 @@ COPY . /app
 
 # start the server
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
+from pydantic import BaseModel
+from typing import List, Optional
+
+class Message(BaseModel):
+    role: str  # 'user' or 'llm'
+    content: str
+
+class Conversation(BaseModel):
+    messages: List[Message] = []
+
+    def add_message(self, role: str, content: str):
+        self.messages.append(Message(role=role, content=content))
+
+    def get_history(self):
+        return self.messages
 
 # app/models/channel.py
 
@@ -139,6 +217,13 @@ channels = load_channels("channels.json")
 
 ### rag3 - Containerized LLM for Python
 
+### Current Issues
+- conversation id issues
+- issue seems to be with this fuction get_or_create_conversation in endpoints
+- the idea is to have a consistent conversation id.  
+
+
+
 ## Project Description
 
 Create an application that uses LLMs to read my documents and researches them.  I want the system to be private so I’m comfortable sharing my personal information like legal documents, bank statements…etc.  I also want to choose different models, including the latest LLMs and embedding models to have the best possible experience.
@@ -153,6 +238,7 @@ pydantic
 uvicorn
 watchfiles
 httpx
+langchain
 ```
 
 
