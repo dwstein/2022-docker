@@ -4,8 +4,10 @@ from typing import Optional
 import uuid
 import logging
 from fastapi import APIRouter, HTTPException, Depends, Response
+from ..services.api_services import OllamaService
 
-from ..services.api_services import query_ollama_api
+
+# from ..services.api_services import query_ollama_api
 from models.models import Conversation  # Ensure correct relative import path
 
 # Setup logger
@@ -52,3 +54,13 @@ async def ask_question(response: Response, model: str, question: str, conversati
         logger.error(f"Error in ask_question: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+
+
+@router.post("/chat-with-ollama")
+async def chat_with_ollama(question: str, session_id: Optional[str] = None):
+    ollama_service = OllamaService()  # Instantiate your service class
+    try:
+        response = await ollama_service.query(question, session_id)
+        return {"answer": response.get('message'), "session_id": response.get('conversation_id')}
+    except HTTPException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)

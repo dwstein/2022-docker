@@ -1,57 +1,47 @@
 # app/services/api_services.py
 
-
 from fastapi import HTTPException
 import httpx
 import logging
-import json
-from models.models import Conversation  # Ensure you import your Conversation model
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 logger = logging.getLogger(__name__)
 
-def parse_json_response(raw_json):
-    """ Attempt to parse multiple JSON objects if found. """
-    try:
-        objs = []
-        idx = 0
-        while idx != len(raw_json):
-            obj, idx = json.JSONDecoder().raw_decode(raw_json, idx=idx)
-            objs.append(obj)
-            raw_json = raw_json[idx:].strip()
-            idx = 0 if raw_json else len(raw_json)
-        return objs
-    except json.JSONDecodeError as e:
-        logger.error("Failed to decode JSON: " + str(e))
-        raise
+class OllamaService:
+    def __init__(self, model_name="gemma:2b"):
+        self.base_url = "http://ollama-container:11434/api/chat"
+        self.model_name = model_name
+        self.headers = {"Content-Type": "application/json"}
+        # Define the prompt template
+        self.prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a world class technical documentation writer."),
+            ("user", "{input}")
+        ])
 
-async def query_ollama_api(model: str, question: str, conversation: Conversation) -> dict:
-    url = "http://ollama-container:11434/api/chat"
-    payload = {
-        "model": model,
-        "messages": conversation.get_history() + [{"role": "user", "content": question}],
-        "stream": False
-    }
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            try:
-                # First try parsing normally
-                answer = response.json()
-            except json.JSONDecodeError:
-                # If normal parsing fails, attempt to parse multiple JSON objects
-                answer = parse_json_response(response.text)
-                if not answer:
-                    raise HTTPException(status_code=500, detail="Invalid JSON response")
-            # Assuming the relevant information is in the first JSON object if multiple were parsed
-            first_answer = answer[0] if isinstance(answer, list) else answer
-            conversation.add_message("user", question)
-            conversation.add_message("llm", first_answer.get("message", {}).get("content", ""))
-            return first_answer
-    except httpx.HTTPStatusError as http_err:
-        logger.error("HTTP status error occurred: {0}".format(http_err))
-        raise HTTPException(status_code=http_err.response.status_code, detail=str(http_err.response.text))
-    except httpx.RequestError as req_err:
-        logger.error("Request failed: {0}".format(req_err))
-        raise HTTPException(status_code=500, detail="Network error")
+    async def format_question(self, question: str) -> str:
+        """
+        Uses the prompt template to format the question.
+        """
+        return self.prompt.render({"input": question})
 
+    async def query(self, question: str, session_id: str = None) -> dict:
+        """
+        Formats the question using the prompt template and sends it to the Ollama API.
+        """
+        formatted_question = await self.format_question(question)
+        payload = {
+            "model": self.model_name,
+            "question": formatted_question,
+            "session_id": session_id  # Include the session ID for context if provided
+        }
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(self.base_url, json=payload, headers=self.headers)
+                response.raise_for_status()  # Handles HTTP errors
+                return response.json()  # Returns the JSON response
+        except httpx.HTTPStatusError as exc:
+            logger.error(f"HTTP status error occurred: {exc.response.status_code}, {exc.response.text}")
+            raise HTTPException(status_code=exc.response.status_code, detail=str(exc.response.text))
+        except httpx.RequestError as exc:
+            logger.error(f"Network error occurred: {exc}")
+            raise HTTPException(status_code=500, detail="Network error during API call to Ollama")

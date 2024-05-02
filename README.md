@@ -1,3 +1,8 @@
+### Please note
+
+- 5/2/24 - I'm giving up on langchaing branch for now becase the library assumes ollama is running locally.  the libarary assumes import Ollama.
+
+
 ### rag3 - Containerized LLM for Python
 
 ### Current Issues
