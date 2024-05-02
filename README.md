@@ -43,28 +43,39 @@ docker-compose up --build
 docker-compose up -d 
 ```
 
+### Prompt Info
+
+## run_full_text.sh
+- `chmod +x run_full_text.sh`
+- `./run_full_text.sh`
+
 
 
 
 ### Project Directory - Goal
 ```bash
-/project_root
-│
-├── app/
-│   ├── __init__.py
-│   ├── main.py               # Your FastAPI application entry point
-│   ├── models/
-│   │   ├── __init__.py
-│   │   └── models.py         # Data models, if any
-│   ├── services/
-│   │   ├── __init__.py
-│   │   └── api_services.py   # Services for external API interactions
-│   └── routes/
-│       ├── __init__.py
-│       └── endpoints.py      # FastAPI routes
-│
+.
 ├── Dockerfile
-├── docker-compose.yml
+├── README.md
+├── app
+│   ├── __init__.py
+│   ├── main.py
+│   ├── routes
+│   │   ├── __init__.py
+│   │   └── endpoints.py
+│   └── services
+│       ├── __init__.py
+│       └── api_services.py
+├── channels.json
+├── directory_tree.txt
+├── docker-compose.yaml
+├── full_text.txt
+├── models
+│   ├── __init__.py
+│   ├── channel.py
+│   └── models.py
 ├── requirements.txt
-└── README.md
+└── run_full_text.sh
+
+5 directories, 17 files
 ```

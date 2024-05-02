@@ -1,0 +1,220 @@
+version: '3.8'
+
+services:
+  backend-service:
+    build: .
+    image: rag3-image
+    container_name: rag3-backend-container
+    command: uvicorn app.main:app --host 0.0.0.0 --port 80 --reload
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/app
+    networks:
+      - app-network
+
+  ollama-service:
+    image: ollama/ollama
+    container_name: ollama-container
+    volumes:
+      - ollama:/root/.ollama
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  ollama:
+    driver: local
+
+
+# app/main.py
+
+
+from fastapi import FastAPI
+from .routes.endpoints import router as api_router
+
+app = FastAPI(title="My FastAPI Application")
+
+# Include all routers
+app.include_router(api_router)
+
+
+# app/routes/endpoints.py
+
+from fastapi import APIRouter, HTTPException
+
+from ..services.api_services import query_ollama_api
+
+router = APIRouter()
+
+@router.get("/")
+def read_root():
+    return {"message": "The server is running!"}
+
+@router.post("/ask")
+async def ask_question(model: str, question: str):
+    try:
+        response = await query_ollama_api(model, question)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+# app/services/api_services.py
+
+from fastapi import HTTPException
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+async def query_ollama_api(model: str, question: str) -> dict:
+    url = "http://ollama-container:11434/api/chat"
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": question}],
+        "stream": False
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as http_err:
+        logger.error(f"HTTP status error occurred: {http_err}; Response: {http_err.response.text if http_err.response else 'No response'}")
+        raise HTTPException(status_code=500, detail=f"HTTP status error: {http_err.response.text if http_err.response else 'No response'}")
+    except httpx.TimeoutException as timeout_err:
+        logger.error("Timeout occurred while trying to connect to the Ollama API")
+        raise HTTPException(status_code=504, detail="Timeout connecting to the Ollama API. Please try again later.")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An unexpected error has occurred. Please contact support.")
+
+
+fastapi
+pydantic
+uvicorn
+watchfiles
+httpx
+
+FROM python:latest
+
+# set the working directory
+WORKDIR /app
+
+# install dependencies
+COPY ./requirements.txt /app
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
+
+# copy the scripts to the folder
+COPY . /app
+
+# start the server
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
+
+# app/models/channel.py
+
+import json
+from dataclasses import dataclass, field
+
+@dataclass
+class Channel:
+    id: str
+    name: str
+    tags: list[str] = field(default_factory=list)
+    description: str = ""
+
+def load_channels(filepath: str) -> dict[str, Channel]:
+    with open(filepath, encoding="utf8") as file:
+        channels_raw = json.load(file)
+        channels = {item['id']: Channel(**item) for item in channels_raw}
+    return channels
+
+channels = load_channels("channels.json")
+
+
+### rag3 - Containerized LLM for Python
+
+## Project Description
+
+Create an application that uses LLMs to read my documents and researches them.  I want the system to be private so I’m comfortable sharing my personal information like legal documents, bank statements…etc.  I also want to choose different models, including the latest LLMs and embedding models to have the best possible experience.
+
+
+### Project Info
+
+## requiremetns.txt
+```bash
+fastapi
+pydantic
+uvicorn
+watchfiles
+httpx
+```
+
+
+### Project Usage
+
+```
+pip install -r requirements.txt
+```
+
+This is how you run the code locally (without Docker):
+
+```
+uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+```
+
+Build and run the Docker image locally, as follows:
+
+```
+docker build -t channel-api .
+docker run -d -p 8080:80 channel-api
+```
+
+In order to run the example server with docker compose, use this:
+
+```
+docker-compose up --build
+docker-compose up -d 
+```
+
+### Prompt Info
+
+## run_full_text.sh
+- `chmod +x run_full_text.sh`
+- `./run_full_text.sh`
+
+
+
+
+### Project Directory - Goal
+```bash
+.
+├── Dockerfile
+├── README.md
+├── app
+│   ├── __init__.py
+│   ├── main.py
+│   ├── routes
+│   │   ├── __init__.py
+│   │   └── endpoints.py
+│   └── services
+│       ├── __init__.py
+│       └── api_services.py
+├── channels.json
+├── directory_tree.txt
+├── docker-compose.yaml
+├── full_text.txt
+├── models
+│   ├── __init__.py
+│   ├── channel.py
+│   └── models.py
+├── requirements.txt
+└── run_full_text.sh
+
+5 directories, 17 files
+```
